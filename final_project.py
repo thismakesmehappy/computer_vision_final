@@ -74,7 +74,7 @@ class Example(tk.Frame):
 
 def main():
 
-    
+    # TODO: Account for wdith of window frame
     canvas_width = 600
     canvas_height = 400
     canvas_origin_x = 00
@@ -86,7 +86,20 @@ def main():
     ex = Example(canvas_height, canvas_width, columns, rows, spacing)
     geo = f'{canvas_width}x{canvas_height}+{canvas_origin_x}+{canvas_origin_y}'
     root.geometry(geo)
+    cap = cv2.VideoCapture(0)
+    ret, frame = cap.read()
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    gray = cv2.resize(gray, (640, 360), interpolation = cv2.INTER_AREA)
+    dst = cv2.edgePreservingFilter(frame, flags=1, sigma_s=60, sigma_r=0.4)
+    color = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+
+    print('got here')
+    color = cv2.resize(color, (10, 10), interpolation = cv2.INTER_AREA)
+    print(color)
+    cv2.imshow('frame',color)
+    print(color[0,0,0], color[0, 0, 1], color[0, 0, 2])
     root.mainloop()
+
 
 
 if __name__ == '__main__':
