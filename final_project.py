@@ -1,6 +1,7 @@
 import tkinter as tk #Tk, Canvas, Frame, BOTH, ARC
 import random
 import cv2
+import numpy as np
 
 class Example(tk.Frame):
 
