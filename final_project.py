@@ -38,6 +38,9 @@ class Example(tk.Frame):
 
         cap = cv2.VideoCapture(0)
         ret, frame = cap.read()
+        small_frame = frame = cv2.resize(frame, (self.resize_width, self.resize_height), interpolation=cv2.INTER_AREA)
+        small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2HSV)
+        print(small_frame[0][0])
 
         
         #gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -52,11 +55,19 @@ class Example(tk.Frame):
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         while True:
             
-            for row in range (self.rows):
+            for row in range(self.rows):
                 for column in range(self.columns):
-                    color = rgb_to_hex((frame[row, column, :]))
+                    fill_hsv = small_frame[row][column]
+                    fill_h = int(fill_hsv[0] * 2)
+                    fill_s = (fill_hsv[1] / 255)
+                    fill_v = (fill_hsv[2] / 255)
+                    stroke_h = fill_h
+                    stroke_s = fill_s * .75
+                    stroke_v = min(fill_v * .25, 1)
+                    fill_color = hsv_to_hex((fill_h, fill_s, fill_v))
+                    stroke_color = hsv_to_hex((stroke_h, stroke_s, stroke_v))
                     origin_y, origin_x, middle_x, middle_y = self.calculate_image_size_and_place(self.shape_width, self.shape_height, row, column)
-                    self.draw_random_shape(canvas, self.shape_width, self.shape_height, origin_y, origin_x, middle_x, middle_y, fill_color=color)
+                    self.draw_random_shape(canvas, self.shape_width, self.shape_height, origin_y, origin_x, middle_x, middle_y, fill_color=fill_color, stroke_color=stroke_color)
             break
 
         canvas.pack(fill=tk.BOTH, expand=1)
@@ -80,7 +91,7 @@ class Example(tk.Frame):
         middle_y = origin_y + (height // 2)
         return origin_y,origin_x,middle_x,middle_y
 
-    def draw_random_shape(self, canvas, width, height, origin_y, origin_x, middle_x, middle_y, fill_color='#fff', outline_color='#000'):
+    def draw_random_shape(self, canvas, width, height, origin_y, origin_x, middle_x, middle_y, fill_color='#fff', stroke_color='#000'):
         random_shape = random.randint(0, 6)
         border_width = 1
         shrink_factor = 3
@@ -92,26 +103,26 @@ class Example(tk.Frame):
 
         # TODO: Shift triangles so the look more centered
         if random_shape == 0: # Diamond
-            canvas.create_polygon([middle_x, origin_y, origin_x + width, middle_y, middle_x, origin_y + height, origin_x, middle_y], fill=fill_color, outline=outline_color, width=border_width)
-            canvas.create_polygon([middle_x, small_origin_y, small_origin_x + small_width, middle_y, middle_x, small_origin_y + small_height, small_origin_x, middle_y], fill=outline_color, width=0)
+            canvas.create_polygon([middle_x, origin_y, origin_x + width, middle_y, middle_x, origin_y + height, origin_x, middle_y], fill=fill_color, outline=stroke_color, width=border_width)
+            canvas.create_polygon([middle_x, small_origin_y, small_origin_x + small_width, middle_y, middle_x, small_origin_y + small_height, small_origin_x, middle_y], fill=stroke_color, width=0)
         elif random_shape == 1: # Triangle up
-            canvas.create_polygon([middle_x, origin_y, origin_x + width, origin_y + height, origin_x, origin_y + height], fill=fill_color, outline=outline_color, width=border_width)
-            canvas.create_polygon([middle_x, small_origin_y, small_origin_x + small_width, small_origin_y + small_height, small_origin_x, small_origin_y + small_height], fill=outline_color, width=0)
+            canvas.create_polygon([middle_x, origin_y, origin_x + width, origin_y + height, origin_x, origin_y + height], fill=fill_color, outline=stroke_color, width=border_width)
+            canvas.create_polygon([middle_x, small_origin_y, small_origin_x + small_width, small_origin_y + small_height, small_origin_x, small_origin_y + small_height], fill=stroke_color, width=0)
         elif random_shape == 2: # Triangle down
-            canvas.create_polygon([middle_x, origin_y + height, origin_x + width, origin_y, origin_x, origin_y], fill=fill_color, outline=outline_color, width=border_width)
-            canvas.create_polygon([middle_x, small_origin_y + small_height, small_origin_x + small_width, small_origin_y, small_origin_x, small_origin_y], fill=outline_color, width=0)
+            canvas.create_polygon([middle_x, origin_y + height, origin_x + width, origin_y, origin_x, origin_y], fill=fill_color, outline=stroke_color, width=border_width)
+            canvas.create_polygon([middle_x, small_origin_y + small_height, small_origin_x + small_width, small_origin_y, small_origin_x, small_origin_y], fill=stroke_color, width=0)
         elif random_shape == 3: # Triangle right
-            canvas.create_polygon([origin_x, origin_y, origin_x + width, middle_y, origin_x, origin_y + height], fill=fill_color, outline=outline_color, width=border_width)
-            canvas.create_polygon([small_origin_x, small_origin_y, small_origin_x + small_width, middle_y, small_origin_x, small_origin_y + small_height], fill=outline_color, width=0)
+            canvas.create_polygon([origin_x, origin_y, origin_x + width, middle_y, origin_x, origin_y + height], fill=fill_color, outline=stroke_color, width=border_width)
+            canvas.create_polygon([small_origin_x, small_origin_y, small_origin_x + small_width, middle_y, small_origin_x, small_origin_y + small_height], fill=stroke_color, width=0)
         elif random_shape == 4: # Triangle left
-            canvas.create_polygon([origin_x + width, origin_y, origin_x, middle_y, origin_x + width, origin_y + height], fill=fill_color, outline=outline_color, width=border_width)
-            canvas.create_polygon([small_origin_x + small_width, small_origin_y, small_origin_x, middle_y, small_origin_x + small_width, small_origin_y + small_height], fill=outline_color, width=0)
+            canvas.create_polygon([origin_x + width, origin_y, origin_x, middle_y, origin_x + width, origin_y + height], fill=fill_color, outline=stroke_color, width=border_width)
+            canvas.create_polygon([small_origin_x + small_width, small_origin_y, small_origin_x, middle_y, small_origin_x + small_width, small_origin_y + small_height], fill=stroke_color, width=0)
         elif random_shape == 5: # Rectangle
-            canvas.create_rectangle(origin_x, origin_y, origin_x + width, origin_y + height, fill=fill_color, outline=outline_color, width=border_width)
-            canvas.create_rectangle(small_origin_x, small_origin_y, small_origin_x + small_width, small_origin_y + small_height, fill=outline_color, width=0)
+            canvas.create_rectangle(origin_x, origin_y, origin_x + width, origin_y + height, fill=fill_color, outline=stroke_color, width=border_width)
+            canvas.create_rectangle(small_origin_x, small_origin_y, small_origin_x + small_width, small_origin_y + small_height, fill=stroke_color, width=0)
         else: # Oval
-            canvas.create_oval(origin_x, origin_y, origin_x + width, origin_y + height, fill=fill_color, outline=outline_color, width=border_width)
-            canvas.create_oval(small_origin_x, small_origin_y, small_origin_x + small_width, small_origin_y + small_height, fill=outline_color, width=0)
+            canvas.create_oval(origin_x, origin_y, origin_x + width, origin_y + height, fill=fill_color, outline=stroke_color, width=border_width)
+            canvas.create_oval(small_origin_x, small_origin_y, small_origin_x + small_width, small_origin_y + small_height, fill=stroke_color, width=0)
 
 
 def main():

@@ -1,16 +1,14 @@
 - create window
 - calculate sizes for columns and rows
 -capture initial image
-determine resize parameters
-    determine proportions of columns to row
-    determine proportions of image width to image height
-    determine the direction to resize over
-    determine how the image will need to be cropped
+-determine resize parameters
+    -determine proportions of columns to row
+    -determine proportions of image width to image height
+    -determine the direction to resize over
+    -determine how the image will need to be cropped
 loop
-    capture camera image
-    convert to hsv
-    resize image
-    crop image as necessary
+    -capture camera image
+    -convert to hsv
     do any necessary image manipulations
     draw the grid
         extract each color from the image
