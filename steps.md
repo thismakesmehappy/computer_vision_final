@@ -9,11 +9,11 @@
 loop
     -capture camera image
     -convert to hsv
-    do any necessary image manipulations
-    draw the grid
-        extract each color from the image
-        convert the color to hex
-        draw the corresponding shape with the color picked
+    -do any necessary image manipulations
+    -draw the grid
+        -extract each color from the image
+        -convert the color to hex
+        -draw the corresponding shape with the color picked
     loop camera capture
         downsample (smaller image, and grayscale)
         calculate the dense flow
@@ -21,5 +21,8 @@ loop
             signal 3 seconds to give the prson time
                 lighten the shapes to 75%, then 50%, then 25%, one second each
             exit loop
+
+take parameters for different variables
+recognize wink or smile and change colors around that
 
     
