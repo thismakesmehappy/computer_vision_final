@@ -5,23 +5,44 @@ import numpy as np
 from colorsys import rgb_to_hsv, hsv_to_rgb
 from colorutils import hsv_to_hex, rgb_to_hex
 import inspect
+import sys
 #TODO: Look at motion_test.py to figure out how to do the loop properly
 
-def mirror(window, canvas_width, canvas_height, columns, rows, spacing):
+def mirror(canvas, canvas_width, canvas_height, columns, rows, spacing):
     shape_width = (canvas_width // columns) - spacing
     shape_height = (canvas_height // rows) - spacing
     resize_height, resize_width = calculate_resize_parameters(rows, columns)
 
-
-    #window.pack(fill=tk.BOTH, expand=1)
-    canvas = create_canvas(window)
     
     cap = cv2.VideoCapture(0)
     ret, frame = cap.read()
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     small_frame = frame = cv2.resize(frame, (resize_width, resize_height), interpolation=cv2.INTER_AREA)
     small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2HSV)
     shapes = np.empty(shape=(rows, columns, 2))
 
+    draw_grid_of_shapes(canvas_width, canvas_height, columns, rows, spacing, shape_width, shape_height, canvas, small_frame, shapes)
+    ret, frame = cap.read()
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    gray = cv2.resize(gray, (640, 360), interpolation = cv2.INTER_AREA)
+    avg_flow = 0
+    while True:
+        canvas.update()
+        if avg_flow > 1.5:
+            print('Flowieeee')
+        ret, frame = cap.read()
+        prev_gray = gray
+        # Our operations on the frame come here
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        gray = cv2.resize(gray, (640, 360), interpolation = cv2.INTER_AREA)
+        flow = np.array(cv2.calcOpticalFlowFarneback(prev_gray, gray, None, 0.5, 3, 15, 3, 5, 1.2, 0))
+        avg_flow = np.average(flow)
+ 
+    avg_flow = 0
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    gray = cv2.resize(gray, (640, 360), interpolation = cv2.INTER_AREA)
+
+def draw_grid_of_shapes(canvas_width, canvas_height, columns, rows, spacing, shape_width, shape_height, canvas, small_frame, shapes):
     for row in range(rows):
         for column in range(columns):
             fill_hsv = small_frame[row][column]
@@ -35,23 +56,7 @@ def mirror(window, canvas_width, canvas_height, columns, rows, spacing):
             stroke_color = hsv_to_hex((stroke_h, stroke_s, stroke_v))
             origin_y, origin_x, middle_x, middle_y = calculate_image_size_and_place(shape_width, shape_height, row, column, rows, columns, canvas_height, canvas_width, spacing)
             shapes[row][column][0], shapes[row][column][1] = draw_random_shape(canvas, shape_width, shape_height, origin_y, origin_x, middle_x, middle_y, fill_color=fill_color, stroke_color=stroke_color)
-    avg_flow = 0
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    gray = cv2.resize(gray, (640, 360), interpolation = cv2.INTER_AREA)
-    while True:
-        if avg_flow > 1.5:
-            mirror()
-        print('looping')
-        ret, frame = cap.read()
-        prev_gray = gray
-        # Our operations on the frame come here
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        gray = cv2.resize(gray, (640, 360), interpolation = cv2.INTER_AREA)
-        flow = np.array(cv2.calcOpticalFlowFarneback(prev_gray, gray, None, 0.5, 3, 15, 3, 5, 1.2, 0))
-        avg_flow = np.average(flow)
 
-        window.mainloop()
-        canvas.destroy()
 
 def calculate_resize_parameters(rows, columns):
     ''' Given the size of the captured image, determine the width and the height of the resized image, and how to crop it, to mantain proportions with the rows and columns of the pixel art '''
@@ -121,8 +126,8 @@ def create_window(canvas_width, canvas_height, canvas_origin_x, canvas_origin_y,
     return window
 
 # Create a canvas for animation and add it to main window
-def create_canvas(window):
-    canvas = tkinter.Canvas(window)
+def create_canvas(window, canvas_width, canvas_height):
+    canvas = tkinter.Canvas(window, width=canvas_width, height=canvas_width)
     canvas.configure(bg="white")
     canvas.pack(fill="both", expand=True)
     return canvas
@@ -140,7 +145,21 @@ def main():
     spacing = 2
 
     window = create_window(canvas_width, canvas_height, canvas_origin_x, canvas_origin_y, title)
-    mirror(window, canvas_width, canvas_height, columns, rows, spacing)
+    canvas = create_canvas(window, canvas_width, canvas_height)
+
+        # while True:
+    #     if avg_flow > 1.5:
+    #         canvas.destroy()
+    #         break
+    #     print('looping')
+    #     ret, frame = cap.read()
+    #     prev_gray = gray
+    #     # Our operations on the frame come here
+    #     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    #     gray = cv2.resize(gray, (640, 360), interpolation = cv2.INTER_AREA)
+    #     flow = np.array(cv2.calcOpticalFlowFarneback(prev_gray, gray, None, 0.5, 3, 15, 3, 5, 1.2, 0))
+    #     avg_flow = np.average(flow)
+    mirror(canvas, canvas_width, canvas_height, columns, rows, spacing)
     window.mainloop()
 
 
