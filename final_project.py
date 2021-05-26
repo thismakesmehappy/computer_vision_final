@@ -12,35 +12,42 @@ def mirror(canvas, canvas_width, canvas_height, columns, rows, spacing):
     shape_width = (canvas_width // columns) - spacing
     shape_height = (canvas_height // rows) - spacing
     resize_height, resize_width = calculate_resize_parameters(rows, columns)
-
+    max_flow_tolerance = 1.5
+    take_picture = True
     
     cap = cv2.VideoCapture(0)
     ret, frame = cap.read()
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    small_frame = frame = cv2.resize(frame, (resize_width, resize_height), interpolation=cv2.INTER_AREA)
-    small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2HSV)
-    shapes = np.empty(shape=(rows, columns, 2))
-
-    draw_grid_of_shapes(canvas_width, canvas_height, columns, rows, spacing, shape_width, shape_height, canvas, small_frame, shapes)
-    ret, frame = cap.read()
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    gray = cv2.resize(gray, (640, 360), interpolation = cv2.INTER_AREA)
-    avg_flow = 0
     while True:
-        canvas.update()
-        if avg_flow > 1.5:
-            print('Flowieeee')
-        ret, frame = cap.read()
-        prev_gray = gray
-        # Our operations on the frame come here
+        if take_picture:
+            canvas.delete("all")
+            ret, frame = cap.read()
+            take_picture = False
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        gray = cv2.resize(gray, (640, 360), interpolation = cv2.INTER_AREA)
-        flow = np.array(cv2.calcOpticalFlowFarneback(prev_gray, gray, None, 0.5, 3, 15, 3, 5, 1.2, 0))
-        avg_flow = np.average(flow)
+        small_frame = frame = cv2.resize(frame, (resize_width, resize_height), interpolation=cv2.INTER_AREA)
+        small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2HSV)
+        shapes = np.empty(shape=(rows, columns, 2))
+
+        draw_grid_of_shapes(canvas_width, canvas_height, columns, rows, spacing, shape_width, shape_height, canvas, small_frame, shapes)
+        ret, frame = cap.read()
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        gray = cv2.resize(gray, (480, 320), interpolation = cv2.INTER_AREA)
+        avg_flow = 0
+        while True:
+            canvas.update()
+            #TODO: Solve _tkinter.TclError: can't invoke "update" command: application has been destroyed
+            if avg_flow > max_flow_tolerance:
+                take_picture = True
+
+                break
+            ret, frame = cap.read()
+            prev_gray = gray
+            # Our operations on the frame come here
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            gray = cv2.resize(gray, (480, 320), interpolation = cv2.INTER_AREA)
+            flow = np.array(cv2.calcOpticalFlowFarneback(prev_gray, gray, None, 0.5, 3, 15, 3, 5, 1.2, 0))
+            avg_flow = np.average(flow)
  
-    avg_flow = 0
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    gray = cv2.resize(gray, (640, 360), interpolation = cv2.INTER_AREA)
+    
 
 def draw_grid_of_shapes(canvas_width, canvas_height, columns, rows, spacing, shape_width, shape_height, canvas, small_frame, shapes):
     for row in range(rows):
