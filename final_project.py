@@ -6,14 +6,17 @@ from colorsys import rgb_to_hsv, hsv_to_rgb
 from colorutils import hsv_to_hex, rgb_to_hex
 import inspect
 import sys
+import time
 #TODO: Look at motion_test.py to figure out how to do the loop properly
 
 def mirror(canvas, canvas_width, canvas_height, columns, rows, spacing):
     shape_width = (canvas_width // columns) - spacing
     shape_height = (canvas_height // rows) - spacing
     resize_height, resize_width = calculate_resize_parameters(rows, columns)
-    max_flow_tolerance = 1.5
+    max_flow_tolerance = 1
     take_picture = True
+    total_wait = 1.5
+    bg_colors = ['#FF9999', '#FFFF99', '#99FF99']
     
     cap = cv2.VideoCapture(0)
     ret, frame = cap.read()
@@ -37,7 +40,12 @@ def mirror(canvas, canvas_width, canvas_height, columns, rows, spacing):
             #TODO: Solve _tkinter.TclError: can't invoke "update" command: application has been destroyed
             if avg_flow > max_flow_tolerance:
                 take_picture = True
-
+                for color in bg_colors:
+                    canvas.configure(background=color)
+                    canvas.update()
+                    individual_wait = total_wait / len(bg_colors)
+                    time.sleep(individual_wait)
+                canvas.configure(background='#FFFFFF')
                 break
             ret, frame = cap.read()
             prev_gray = gray
