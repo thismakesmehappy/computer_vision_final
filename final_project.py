@@ -13,9 +13,10 @@ def mirror(canvas, canvas_width, canvas_height, columns, rows, spacing):
     shape_width = (canvas_width // columns) - spacing
     shape_height = (canvas_height // rows) - spacing
     resize_height, resize_width = calculate_resize_parameters(rows, columns)
-    max_flow_tolerance = 1
+    max_flow_tolerance = 1.5
     take_picture = True
     total_wait = 1.5
+    motion_wait = .1
     bg_colors = ['#FF9999', '#FFFF99', '#99FF99']
     
     cap = cv2.VideoCapture(0)
@@ -30,7 +31,7 @@ def mirror(canvas, canvas_width, canvas_height, columns, rows, spacing):
         small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2HSV)
         shapes = np.empty(shape=(rows, columns, 2))
 
-        draw_grid_of_shapes(canvas_width, canvas_height, columns, rows, spacing, shape_width, shape_height, canvas, small_frame, shapes)
+        draw_grid_of_shapes(canvas_width, canvas_height, columns, rows, spacing, shape_width, shape_height, canvas, small_frame, shapes, h_multiplier=1, s_multiplier=1, v_multiplier=1)
         ret, frame = cap.read()
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         gray = cv2.resize(gray, (480, 320), interpolation = cv2.INTER_AREA)
@@ -54,19 +55,20 @@ def mirror(canvas, canvas_width, canvas_height, columns, rows, spacing):
             gray = cv2.resize(gray, (480, 320), interpolation = cv2.INTER_AREA)
             flow = np.array(cv2.calcOpticalFlowFarneback(prev_gray, gray, None, 0.5, 3, 15, 3, 5, 1.2, 0))
             avg_flow = np.average(flow)
+            time.sleep(motion_wait)
  
     
 
-def draw_grid_of_shapes(canvas_width, canvas_height, columns, rows, spacing, shape_width, shape_height, canvas, small_frame, shapes):
+def draw_grid_of_shapes(canvas_width, canvas_height, columns, rows, spacing, shape_width, shape_height, canvas, small_frame, shapes, h_multiplier=1, s_multiplier=1, v_multiplier=1):
     for row in range(rows):
         for column in range(columns):
             fill_hsv = small_frame[row][column]
-            fill_h = int(fill_hsv[0] * 2)
-            fill_s = (fill_hsv[1] / 255)
-            fill_v = (fill_hsv[2] / 255)
-            stroke_h = fill_h
-            stroke_s = fill_s * .75
-            stroke_v = min(fill_v * .25, 1)
+            fill_h = (int(fill_hsv[0] * 2) * abs(h_multiplier)) % 360
+            fill_s = min((fill_hsv[1] / 255) * abs(s_multiplier), 1)
+            fill_v = min((fill_hsv[2] / 255) * abs(v_multiplier), 1)
+            stroke_h = (fill_h * abs(h_multiplier)) % 360
+            stroke_s = min(fill_s * .75 * abs(s_multiplier), 1)
+            stroke_v = min(fill_v * .25 * abs(v_multiplier), 1)
             fill_color = hsv_to_hex((fill_h, fill_s, fill_v))
             stroke_color = hsv_to_hex((stroke_h, stroke_s, stroke_v))
             origin_y, origin_x, middle_x, middle_y = calculate_image_size_and_place(shape_width, shape_height, row, column, rows, columns, canvas_height, canvas_width, spacing)
