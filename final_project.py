@@ -3,11 +3,17 @@ import random
 import cv2
 import numpy as np
 from colorsys import rgb_to_hsv, hsv_to_rgb
-from colorutils import hsv_to_hex, rgb_to_hex
+from colorutils import hsv_to_hex
 import inspect
 import sys
 import time
-#TODO: Look at motion_test.py to figure out how to do the loop properly
+
+cascade_face = cv2.CascadeClassifier('haarcascade_frontalface_default.xml') 
+cascade_eye = cv2.CascadeClassifier('haarcascade_eye.xml') 
+cascade_smile = cv2.CascadeClassifier('haarcascade_smile.xml')
+
+# https://www.geeksforgeeks.org/python-smile-detection-using-opencv/
+
 
 def mirror(canvas, canvas_width, canvas_height, columns, rows, spacing):
     shape_width = (canvas_width // columns) - spacing
@@ -15,24 +21,31 @@ def mirror(canvas, canvas_width, canvas_height, columns, rows, spacing):
     resize_height, resize_width = calculate_resize_parameters(rows, columns)
     max_flow_tolerance = 1.5
     take_picture = True
+    smile_detected = False
     total_wait = 1.5
     motion_wait = .1
     bg_colors = ['#FF9999', '#FFFF99', '#99FF99']
+    h_multiplier = s_multiplier = v_multiplier = 1
     
     cap = cv2.VideoCapture(0)
-    ret, frame = cap.read()
+    _, frame = cap.read()
     while True:
         if take_picture:
             canvas.delete("all")
-            ret, frame = cap.read()
+            _, frame = cap.read()
             take_picture = False
+        if smile_detected:
+            canvas.delete("all")
+            s_multiplier = 1.5
+            v_multiplier = 1.5
+            smile_detected = False
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         small_frame = frame = cv2.resize(frame, (resize_width, resize_height), interpolation=cv2.INTER_AREA)
         small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2HSV)
         shapes = np.empty(shape=(rows, columns, 2))
 
-        draw_grid_of_shapes(canvas_width, canvas_height, columns, rows, spacing, shape_width, shape_height, canvas, small_frame, shapes, h_multiplier=1, s_multiplier=1, v_multiplier=1)
-        ret, frame = cap.read()
+        draw_grid_of_shapes(canvas_width, canvas_height, columns, rows, spacing, shape_width, shape_height, canvas, small_frame, shapes, h_multiplier, s_multiplier, v_multiplier)
+        h_multiplier = s_multiplier = v_multiplier = 1
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         gray = cv2.resize(gray, (480, 320), interpolation = cv2.INTER_AREA)
         avg_flow = 0
@@ -48,7 +61,11 @@ def mirror(canvas, canvas_width, canvas_height, columns, rows, spacing):
                     time.sleep(individual_wait)
                 canvas.configure(background='#FFFFFF')
                 break
-            ret, frame = cap.read()
+            if detect_smile(gray):
+                smile_detected = True
+                break
+
+            _, frame = cap.read()
             prev_gray = gray
             # Our operations on the frame come here
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -123,7 +140,6 @@ def draw_random_shape(canvas, width, height, origin_y, origin_x, middle_x, middl
         shape_small = canvas.create_oval(small_origin_x, small_origin_y, small_origin_x + small_width, small_origin_y + small_height, fill=stroke_color, width=0)
     return shape_big, shape_small
 
-
 def calculate_image_size_and_place(width, height, row, column, rows, columns, canvas_height, canvas_width, spacing):
     # Calculate initial position for each shape
     origin_y = row * (canvas_height / rows) + spacing // 2
@@ -149,6 +165,60 @@ def create_canvas(window, canvas_width, canvas_height):
     canvas.pack(fill="both", expand=True)
     return canvas
 
+
+def detect_smile2(grayscale, img):
+    cascade_face = cv2.CascadeClassifier('haarcascade_frontalface_default.xml') 
+    cascade_eye = cv2.CascadeClassifier('haarcascade_eye.xml') 
+    cascade_smile = cv2.CascadeClassifier('haarcascade_smile.xml')
+    face = cascade_face.detectMultiScale(grayscale, 1.3, 5)
+    for (x_face, y_face, w_face, h_face) in face:
+        cv2.rectangle(img, (x_face, y_face), (x_face+w_face, y_face+h_face), (255, 130, 0), 2)
+        ri_grayscale = grayscale[y_face:y_face+h_face, x_face:x_face+w_face]
+        ri_color = img[y_face:y_face+h_face, x_face:x_face+w_face] 
+        eye = cascade_eye.detectMultiScale(ri_grayscale, 1.2, 18) 
+        for (x_eye, y_eye, w_eye, h_eye) in eye:
+            cv2.rectangle(ri_color,(x_eye, y_eye),(x_eye+w_eye, y_eye+h_eye), (0, 180, 60), 2) 
+        smile = cascade_smile.detectMultiScale(ri_grayscale, 4, 20)
+        for (x_smile, y_smile, w_smile, h_smile) in smile: 
+            return True
+    return False 
+
+
+def detect_smile(gray):
+    # Adapted from https://dev.to/hammertoe/smile-detector-using-opencv-to-detect-smiling-faces-in-a-video-4l80
+    # detect faces within the greyscale version of the frame
+    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades +'haarcascade_frontalface_default.xml')
+    eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades +'haarcascade_eye.xml')
+    smile_cascade = cv2.CascadeClassifier(cv2.data.haarcascades +'haarcascade_smile.xml')
+    faces = face_cascade.detectMultiScale(gray, 1.3, 5)
+    num_smiles = 0
+
+    # For each face we find...
+    for (x, y, w, h) in faces:
+        # if args.verbose: # draw rectangle if in verbose mode
+        #     cv2.rectangle(frame, (x, y), ((x + w), (y + h)), (255, 0, 0), 2)
+
+        # Calculate the "region of interest", ie the are of the frame
+        # containing the face
+        roi_gray = gray[y:y+h, x:x+w]
+        # roi_color = frame[y:y+h, x:x+w]
+
+        # Within the grayscale ROI, look for smiles 
+        smiles = smile_cascade.detectMultiScale(roi_gray, 10, 12)
+
+        #eye = eye_cascade.detectMultiScale(roi_gray, 1.2, 18) 
+
+        # If we find smiles then increment our counter
+        if len(smiles):
+            num_smiles += 1
+
+        # # If verbose, draw a rectangle on the image indicating where the smile was found
+        # if args.verbose:
+        #     for (sx, sy, sw, sh) in smiles:
+        #         cv2.rectangle(roi_color, (sx, sy), ((sx + sw), (sy + sh)), (0, 0, 255), 2)
+    print(num_smiles)
+    return num_smiles > 0
+
 def main():
 
     # TODO: Account for wdith of window frame
@@ -161,21 +231,16 @@ def main():
     rows = 41
     spacing = 2
 
+    # Smile Detection https://www.geeksforgeeks.org/python-smile-detection-using-opencv/
+    # face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades +'haarcascade_frontalface_default.xml')
+    # eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades +'haarcascade_eye.xml')
+    # smile_cascade = cv2.CascadeClassifier(cv2.data.haarcascades +'haarcascade_smile.xml')
+    # faces = face_cascade.detectMultiScale(gray, 1.3, 5)
+
+
     window = create_window(canvas_width, canvas_height, canvas_origin_x, canvas_origin_y, title)
     canvas = create_canvas(window, canvas_width, canvas_height)
 
-        # while True:
-    #     if avg_flow > 1.5:
-    #         canvas.destroy()
-    #         break
-    #     print('looping')
-    #     ret, frame = cap.read()
-    #     prev_gray = gray
-    #     # Our operations on the frame come here
-    #     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    #     gray = cv2.resize(gray, (640, 360), interpolation = cv2.INTER_AREA)
-    #     flow = np.array(cv2.calcOpticalFlowFarneback(prev_gray, gray, None, 0.5, 3, 15, 3, 5, 1.2, 0))
-    #     avg_flow = np.average(flow)
     mirror(canvas, canvas_width, canvas_height, columns, rows, spacing)
     window.mainloop()
 
