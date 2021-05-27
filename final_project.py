@@ -8,14 +8,17 @@ import inspect
 import sys
 import time
 
+
 cascade_face = cv2.CascadeClassifier('haarcascade_frontalface_default.xml') 
 cascade_eye = cv2.CascadeClassifier('haarcascade_eye.xml') 
 cascade_smile = cv2.CascadeClassifier('haarcascade_smile.xml')
 
 # https://www.geeksforgeeks.org/python-smile-detection-using-opencv/
 
+def close(event):
+    sys.exit() # if you want to exit the entire thing
 
-def mirror(canvas, canvas_width, canvas_height, columns, rows, spacing):
+def mirror(canvas, canvas_width, canvas_height, columns, rows, spacing, window):
     shape_width = (canvas_width // columns) - spacing
     shape_height = (canvas_height // rows) - spacing
     resize_height, resize_width = calculate_resize_parameters(rows, columns)
@@ -28,6 +31,10 @@ def mirror(canvas, canvas_width, canvas_height, columns, rows, spacing):
     h_multiplier = s_multiplier = v_multiplier = 1
     
     cap = cv2.VideoCapture(0)
+    # The first photo tends to be darker, so we're taking a couple of photos 
+    #   before entering the loop to "warm up" the camera
+    _, frame = cap.read()
+    time.sleep(.05)
     _, frame = cap.read()
     while True:
         if take_picture:
@@ -50,10 +57,12 @@ def mirror(canvas, canvas_width, canvas_height, columns, rows, spacing):
         gray = cv2.resize(gray, (480, 320), interpolation = cv2.INTER_AREA)
         avg_flow = 0
         while True:
+
             canvas.update()
             #TODO: Solve _tkinter.TclError: can't invoke "update" command: application has been destroyed
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                exit()
+            key = cv2.waitKey(1)
+            if key == 27 or key == ord('q') or key == ('Q'): # exit on ESC
+                sys.exit()
             if avg_flow > max_flow_tolerance:
                 take_picture = True
                 for color in bg_colors:
@@ -187,7 +196,7 @@ def detect_smile(gray):
         # roi_color = frame[y:y+h, x:x+w]
 
         # Within the grayscale ROI, look for smiles 
-        smiles = smile_cascade.detectMultiScale(roi_gray, 10, 12)
+        smiles = smile_cascade.detectMultiScale(roi_gray, 8, 7)
 
         # If we find smiles then increment our counter
         if len(smiles):
@@ -217,7 +226,7 @@ def main():
     window = create_window(canvas_width, canvas_height, canvas_origin_x, canvas_origin_y, title)
     canvas = create_canvas(window, canvas_width, canvas_height)
 
-    mirror(canvas, canvas_width, canvas_height, columns, rows, spacing)
+    mirror(canvas, canvas_width, canvas_height, columns, rows, spacing, window)
     window.mainloop()
 
 
