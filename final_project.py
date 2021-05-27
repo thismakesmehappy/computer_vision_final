@@ -52,6 +52,8 @@ def mirror(canvas, canvas_width, canvas_height, columns, rows, spacing):
         while True:
             canvas.update()
             #TODO: Solve _tkinter.TclError: can't invoke "update" command: application has been destroyed
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                exit()
             if avg_flow > max_flow_tolerance:
                 take_picture = True
                 for color in bg_colors:
@@ -64,11 +66,12 @@ def mirror(canvas, canvas_width, canvas_height, columns, rows, spacing):
             if detect_smile(gray):
                 smile_detected = True
                 break
+            
 
-            _, frame = cap.read()
+            _, frame_looping = cap.read()
             prev_gray = gray
             # Our operations on the frame come here
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            gray = cv2.cvtColor(frame_looping, cv2.COLOR_BGR2GRAY)
             gray = cv2.resize(gray, (480, 320), interpolation = cv2.INTER_AREA)
             flow = np.array(cv2.calcOpticalFlowFarneback(prev_gray, gray, None, 0.5, 3, 15, 3, 5, 1.2, 0))
             avg_flow = np.average(flow)
@@ -160,28 +163,10 @@ def create_window(canvas_width, canvas_height, canvas_origin_x, canvas_origin_y,
 
 # Create a canvas for animation and add it to main window
 def create_canvas(window, canvas_width, canvas_height):
-    canvas = tkinter.Canvas(window, width=canvas_width, height=canvas_width)
+    canvas = tkinter.Canvas(window, width=canvas_width, height=canvas_height)
     canvas.configure(bg="white")
     canvas.pack(fill="both", expand=True)
     return canvas
-
-
-def detect_smile2(grayscale, img):
-    cascade_face = cv2.CascadeClassifier('haarcascade_frontalface_default.xml') 
-    cascade_eye = cv2.CascadeClassifier('haarcascade_eye.xml') 
-    cascade_smile = cv2.CascadeClassifier('haarcascade_smile.xml')
-    face = cascade_face.detectMultiScale(grayscale, 1.3, 5)
-    for (x_face, y_face, w_face, h_face) in face:
-        cv2.rectangle(img, (x_face, y_face), (x_face+w_face, y_face+h_face), (255, 130, 0), 2)
-        ri_grayscale = grayscale[y_face:y_face+h_face, x_face:x_face+w_face]
-        ri_color = img[y_face:y_face+h_face, x_face:x_face+w_face] 
-        eye = cascade_eye.detectMultiScale(ri_grayscale, 1.2, 18) 
-        for (x_eye, y_eye, w_eye, h_eye) in eye:
-            cv2.rectangle(ri_color,(x_eye, y_eye),(x_eye+w_eye, y_eye+h_eye), (0, 180, 60), 2) 
-        smile = cascade_smile.detectMultiScale(ri_grayscale, 4, 20)
-        for (x_smile, y_smile, w_smile, h_smile) in smile: 
-            return True
-    return False 
 
 
 def detect_smile(gray):
@@ -195,8 +180,6 @@ def detect_smile(gray):
 
     # For each face we find...
     for (x, y, w, h) in faces:
-        # if args.verbose: # draw rectangle if in verbose mode
-        #     cv2.rectangle(frame, (x, y), ((x + w), (y + h)), (255, 0, 0), 2)
 
         # Calculate the "region of interest", ie the are of the frame
         # containing the face
@@ -206,17 +189,10 @@ def detect_smile(gray):
         # Within the grayscale ROI, look for smiles 
         smiles = smile_cascade.detectMultiScale(roi_gray, 10, 12)
 
-        #eye = eye_cascade.detectMultiScale(roi_gray, 1.2, 18) 
-
         # If we find smiles then increment our counter
         if len(smiles):
             num_smiles += 1
 
-        # # If verbose, draw a rectangle on the image indicating where the smile was found
-        # if args.verbose:
-        #     for (sx, sy, sw, sh) in smiles:
-        #         cv2.rectangle(roi_color, (sx, sy), ((sx + sw), (sy + sh)), (0, 0, 255), 2)
-    print(num_smiles)
     return num_smiles > 0
 
 def main():
