@@ -9,18 +9,10 @@ import sys
 import time
 
 
-cascade_face = cv2.CascadeClassifier('haarcascade_frontalface_default.xml') 
-cascade_eye = cv2.CascadeClassifier('haarcascade_eye.xml') 
-cascade_smile = cv2.CascadeClassifier('haarcascade_smile.xml')
-
 # https://www.geeksforgeeks.org/python-smile-detection-using-opencv/
 
-def close(event):
-    sys.exit() # if you want to exit the entire thing
 
-def mirror(canvas, canvas_width, canvas_height, columns, rows, spacing, window):
-    shape_width = (canvas_width // columns) - spacing
-    shape_height = (canvas_height // rows) - spacing
+def mirror(canvas, canvas_width, canvas_height, columns, rows, spacing, window_padding):
     resize_height, resize_width = calculate_resize_parameters(rows, columns)
     max_flow_tolerance = 1.5
     take_picture = True
@@ -56,16 +48,15 @@ def mirror(canvas, canvas_width, canvas_height, columns, rows, spacing, window):
             smile_detected = False
         small_frame = frame = cv2.resize(frame, (resize_width, resize_height), interpolation=cv2.INTER_AREA)
         small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2HSV)
-        shapes = np.empty(shape=(rows, columns, 2))
+        #shapes = np.empty(shape=(rows, columns, 2))
 
-        draw_grid_of_shapes(canvas_width, canvas_height, columns, rows, spacing, shape_width, shape_height, canvas, small_frame, shapes, h_multiplier, s_multiplier, v_multiplier)
+        draw_grid_of_shapes(canvas_width, canvas_height, columns, rows, spacing, window_padding, canvas, small_frame, h_multiplier, s_multiplier, v_multiplier)
         h_multiplier = s_multiplier = v_multiplier = 1
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         gray = clahe.apply(gray)
         gray = cv2.resize(gray, (480, 320), interpolation = cv2.INTER_AREA)
         avg_flow = 0
         while True:
-
             canvas.update()
             #TODO: Solve _tkinter.TclError: can't invoke "update" command: application has been destroyed
             key = cv2.waitKey(1)
@@ -83,8 +74,6 @@ def mirror(canvas, canvas_width, canvas_height, columns, rows, spacing, window):
             if detect_smile(gray):
                 smile_detected = True
                 break
-            
-
             _, frame_looping = cap.read()
             prev_gray = gray
             # Our operations on the frame come here
@@ -97,7 +86,7 @@ def mirror(canvas, canvas_width, canvas_height, columns, rows, spacing, window):
  
     
 
-def draw_grid_of_shapes(canvas_width, canvas_height, columns, rows, spacing, shape_width, shape_height, canvas, small_frame, shapes, h_multiplier=1, s_multiplier=1, v_multiplier=1):
+def draw_grid_of_shapes(canvas_width, canvas_height, columns, rows, spacing, window_padding, canvas, small_frame, h_multiplier=1, s_multiplier=1, v_multiplier=1):
     for row in range(rows):
         for column in range(columns):
             fill_hsv = small_frame[row][column]
@@ -109,8 +98,8 @@ def draw_grid_of_shapes(canvas_width, canvas_height, columns, rows, spacing, sha
             stroke_v = min(fill_v * .25 * abs(v_multiplier), 1)
             fill_color = hsv_to_hex((fill_h, fill_s, fill_v))
             stroke_color = hsv_to_hex((stroke_h, stroke_s, stroke_v))
-            origin_y, origin_x, middle_x, middle_y = calculate_image_size_and_place(shape_width, shape_height, row, column, rows, columns, canvas_height, canvas_width, spacing)
-            shapes[row][column][0], shapes[row][column][1] = draw_random_shape(canvas, shape_width, shape_height, origin_y, origin_x, middle_x, middle_y, fill_color=fill_color, stroke_color=stroke_color)
+            origin_y, origin_x, middle_x, middle_y, shape_width, shape_height = calculate_image_size_and_place(row, column, rows, columns, canvas_height, canvas_width, spacing, window_padding)
+            draw_random_shape(canvas, shape_width, shape_height, origin_y, origin_x, middle_x, middle_y, fill_color=fill_color, stroke_color=stroke_color)
 
 
 def calculate_resize_parameters(rows, columns):
@@ -133,8 +122,8 @@ def draw_random_shape(canvas, width, height, origin_y, origin_x, middle_x, middl
     shrink_factor = 3
     small_width = width // shrink_factor
     small_height = height // shrink_factor
-    small_origin_x = middle_x - small_width // 2
-    small_origin_y = middle_y - small_height // 2
+    small_origin_x = middle_x - small_width / 2
+    small_origin_y = middle_y - small_height / 2
     # TODO: Correct the math so when it rounds pixels it's evenly centered
 
     # TODO: Shift triangles so the look more centered
@@ -161,14 +150,19 @@ def draw_random_shape(canvas, width, height, origin_y, origin_x, middle_x, middl
         shape_small = canvas.create_oval(small_origin_x, small_origin_y, small_origin_x + small_width, small_origin_y + small_height, fill=stroke_color, width=0)
     return shape_big, shape_small
 
-def calculate_image_size_and_place(width, height, row, column, rows, columns, canvas_height, canvas_width, spacing):
+def calculate_image_size_and_place(row, column, rows, columns, canvas_height, canvas_width, spacing, window_padding):
+
+    shape_width = ((canvas_width - 2 * window_padding) / columns) - spacing
+    shape_height = ((canvas_height - 2 * window_padding) / rows) - spacing
     # Calculate initial position for each shape
-    origin_y = row * (canvas_height / rows) + spacing // 2
-    origin_x = column * (canvas_width / columns) + spacing // 2
+    origin_y = row * ((canvas_height - 2 * window_padding) / rows) + spacing / 2 + window_padding
+    origin_x = column * ((canvas_width - 2 * window_padding) / columns) + spacing / 2 + window_padding
     # Calculate middle points in each direction
-    middle_x = origin_x + (width // 2)
-    middle_y = origin_y + (height // 2)
-    return origin_y, origin_x, middle_x, middle_y
+    middle_x = origin_x + (shape_width / 2)
+    middle_y = origin_y + (shape_height / 2)
+
+
+    return origin_y, origin_x, middle_x, middle_y, shape_width, shape_height
 
 # The main window of the animation
 def create_window(canvas_width, canvas_height, canvas_origin_x, canvas_origin_y, title):
@@ -186,14 +180,12 @@ def create_canvas(window, canvas_width, canvas_height):
     canvas.pack(fill="both", expand=True)
     return canvas
 
-
 def detect_smile(gray):
     # Adapted from https://dev.to/hammertoe/smile-detector-using-opencv-to-detect-smiling-faces-in-a-video-4l80
     # detect faces within the greyscale version of the frame
     face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades +'haarcascade_frontalface_default.xml')
-    eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades +'haarcascade_eye.xml')
     smile_cascade = cv2.CascadeClassifier(cv2.data.haarcascades +'haarcascade_smile.xml')
-    faces = face_cascade.detectMultiScale(gray, 1.3, 5)
+    faces = face_cascade.detectMultiScale(gray, 1.1, 3)
     num_smiles = 0
 
     # For each face we find...
@@ -205,7 +197,7 @@ def detect_smile(gray):
         # roi_color = frame[y:y+h, x:x+w]
 
         # Within the grayscale ROI, look for smiles 
-        smiles = smile_cascade.detectMultiScale(roi_gray, 4, 6)
+        smiles = smile_cascade.detectMultiScale(roi_gray, 3, 8)
 
         # If we find smiles then increment our counter
         if len(smiles):
@@ -215,15 +207,16 @@ def detect_smile(gray):
 
 def main():
 
-    # TODO: Account for wdith of window frame
-    canvas_width = 800
-    canvas_height = 600
-    canvas_origin_x = 00
-    canvas_origin_y = 00
-    title = 'Geomirror'
-    columns = 88
-    rows = 41
-    spacing = 2
+    CANVAS_WIDTH = 800
+    CANVAS_HEIGHT = 600
+    CANVAS_ORIGIN_X = 00
+    CANVAS_ORIGIN_Y = 00
+    
+    TITLE = 'Geomirror'
+    COLUMNS = 88
+    ROWS = 41
+    SPACING = 2
+    WINDOW_PADDING = 5
 
     # Smile Detection https://www.geeksforgeeks.org/python-smile-detection-using-opencv/
     # face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades +'haarcascade_frontalface_default.xml')
@@ -232,12 +225,10 @@ def main():
     # faces = face_cascade.detectMultiScale(gray, 1.3, 5)
 
 
-    window = create_window(canvas_width, canvas_height, canvas_origin_x, canvas_origin_y, title)
-    canvas = create_canvas(window, canvas_width, canvas_height)
+    window = create_window(CANVAS_WIDTH, CANVAS_HEIGHT, CANVAS_ORIGIN_X, CANVAS_ORIGIN_Y, TITLE)
+    canvas = create_canvas(window, CANVAS_WIDTH, CANVAS_HEIGHT)
 
-    mirror(canvas, canvas_width, canvas_height, columns, rows, spacing, window)
-    window.mainloop()
-
+    mirror(canvas, CANVAS_WIDTH, CANVAS_HEIGHT, COLUMNS, ROWS, SPACING, WINDOW_PADDING)
 
 
 if __name__ == '__main__':
