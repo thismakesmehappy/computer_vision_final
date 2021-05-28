@@ -8,7 +8,9 @@ import inspect
 import sys
 import time
 import argparse
-
+import dlib
+import math
+BLINK_RATIO_THRESHOLD = 9
 
 
 # https://www.geeksforgeeks.org/python-smile-detection-using-opencv/
@@ -19,6 +21,7 @@ def mirror(window, canvas, canvas_width, canvas_height, columns, rows, spacing, 
     max_flow_tolerance = 1.5
     take_picture = True
     smile_detected = False
+    wink_detected = False
     total_wait = 1.5
     motion_wait = .1
     bg_colors = ['#FF9999', '#FFFF99', '#99FF99']
@@ -28,10 +31,17 @@ def mirror(window, canvas, canvas_width, canvas_height, columns, rows, spacing, 
     # The first photo tends to be darker, so we're taking a couple of photos 
     #   before entering the loop to "warm up" the camera
     _, frame = cap.read()
-    #time.sleep(.05)
-    #_, frame = cap.read()
+    time.sleep(.05)
+    _, frame = cap.read()
     # Adaptive histogram equalization to equalize the color / contrast
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    # Face detection
+
+    detector = dlib.get_frontal_face_detector()
+    predictor = dlib.shape_predictor('data/shape_predictor_68_face_landmarks.dat')
+    #these landmarks are based on the image above 
+    left_eye_landmarks = [36, 37, 38, 39, 40, 41]
+    right_eye_landmarks = [42, 43, 44, 45, 46, 47]
     try:
         while True:
             if take_picture:
@@ -49,6 +59,12 @@ def mirror(window, canvas, canvas_width, canvas_height, columns, rows, spacing, 
                 s_multiplier = 1.5
                 v_multiplier = 1.5
                 smile_detected = False
+            if wink_detected:
+                canvas.delete("all")
+                h_multiplier = 1.3
+                s_multiplier = .5
+                v_multiplier = 1.2
+                wink_detected = False
             small_frame = frame = cv2.resize(frame, (resize_width, resize_height), interpolation=cv2.INTER_AREA)
             small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2HSV)
             #shapes = np.empty(shape=(rows, columns, 2))
@@ -73,6 +89,24 @@ def mirror(window, canvas, canvas_width, canvas_height, columns, rows, spacing, 
                 if detect_smile(gray):
                     smile_detected = True
                     break
+                
+                # Blink detection
+                faces,_,_ = detector.run(image = gray, upsample_num_times = 0, 
+                       adjust_threshold = 0.0)
+                for face in faces:
+        
+                    landmarks = predictor(gray, face)
+
+                    #-----Step 5: Calculating blink ratio for one eye-----
+                    left_eye_ratio  = get_blink_ratio(left_eye_landmarks, landmarks)
+                    right_eye_ratio = get_blink_ratio(right_eye_landmarks, landmarks)
+                    blink_ratio     = (left_eye_ratio + right_eye_ratio) / 2
+                    if blink_ratio > BLINK_RATIO_THRESHOLD:
+                        #Blink detected! Do Something!
+                        wink_detected = True
+                if wink_detected:
+                    break
+
                 _, frame_looping = cap.read()
                 prev_gray = gray
                 # Our operations on the frame come here
@@ -85,6 +119,33 @@ def mirror(window, canvas, canvas_width, canvas_height, columns, rows, spacing, 
     except:
         pass
  
+def midpoint(point1 ,point2):
+    return (point1.x + point2.x)/2,(point1.y + point2.y)/2
+
+def euclidean_distance(point1 , point2):
+    return math.sqrt((point1[0] - point2[0])**2 + (point1[1] - point2[1])**2)
+
+def get_blink_ratio(eye_points, facial_landmarks):
+    
+    #loading all the required points
+    corner_left  = (facial_landmarks.part(eye_points[0]).x, 
+                    facial_landmarks.part(eye_points[0]).y)
+    corner_right = (facial_landmarks.part(eye_points[3]).x, 
+                    facial_landmarks.part(eye_points[3]).y)
+    
+    center_top    = midpoint(facial_landmarks.part(eye_points[1]), 
+                             facial_landmarks.part(eye_points[2]))
+    center_bottom = midpoint(facial_landmarks.part(eye_points[5]), 
+                             facial_landmarks.part(eye_points[4]))
+
+    #calculating distance
+    horizontal_length = euclidean_distance(corner_left,corner_right)
+    vertical_length = euclidean_distance(center_top,center_bottom)
+
+    ratio = horizontal_length / vertical_length
+
+    return ratio
+
 def key(event):
     print(event.char)
     if event.char == 'q':
