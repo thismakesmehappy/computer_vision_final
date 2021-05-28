@@ -122,8 +122,8 @@ def draw_random_shape(canvas, width, height, origin_y, origin_x, middle_x, middl
     random_shape = random.randint(0, 6)
     border_width = 1
     shrink_factor = 3
-    small_width = width // shrink_factor
-    small_height = height // shrink_factor
+    small_width = width / shrink_factor
+    small_height = height / shrink_factor
     small_origin_x = middle_x - small_width / 2
     small_origin_y = middle_y - small_height / 2
     # TODO: Correct the math so when it rounds pixels it's evenly centered
@@ -134,15 +134,19 @@ def draw_random_shape(canvas, width, height, origin_y, origin_x, middle_x, middl
         shape_small = canvas.create_polygon([middle_x, small_origin_y, small_origin_x + small_width, middle_y, middle_x, small_origin_y + small_height, small_origin_x, middle_y], fill=stroke_color, width=0)
     elif random_shape == 1: # Triangle up
         shape_big = canvas.create_polygon([middle_x, origin_y, origin_x + width, origin_y + height, origin_x, origin_y + height], fill=fill_color, outline=stroke_color, width=border_width)
+        small_origin_y += small_height // 2
         shape_small = canvas.create_polygon([middle_x, small_origin_y, small_origin_x + small_width, small_origin_y + small_height, small_origin_x, small_origin_y + small_height], fill=stroke_color, width=0)
     elif random_shape == 2: # Triangle down
         shape_big = canvas.create_polygon([middle_x, origin_y + height, origin_x + width, origin_y, origin_x, origin_y], fill=fill_color, outline=stroke_color, width=border_width)
+        small_origin_y -= small_height // 2
         shape_small = canvas.create_polygon([middle_x, small_origin_y + small_height, small_origin_x + small_width, small_origin_y, small_origin_x, small_origin_y], fill=stroke_color, width=0)
     elif random_shape == 3: # Triangle right
         shape_big = canvas.create_polygon([origin_x, origin_y, origin_x + width, middle_y, origin_x, origin_y + height], fill=fill_color, outline=stroke_color, width=border_width)
+        small_origin_x -= small_width // 3
         shape_small = canvas.create_polygon([small_origin_x, small_origin_y, small_origin_x + small_width, middle_y, small_origin_x, small_origin_y + small_height], fill=stroke_color, width=0)
     elif random_shape == 4: # Triangle left
         shape_big = canvas.create_polygon([origin_x + width, origin_y, origin_x, middle_y, origin_x + width, origin_y + height], fill=fill_color, outline=stroke_color, width=border_width)
+        small_origin_x += small_width // 3
         shape_small = canvas.create_polygon([small_origin_x + small_width, small_origin_y, small_origin_x, middle_y, small_origin_x + small_width, small_origin_y + small_height], fill=stroke_color, width=0)
     elif random_shape == 5: # Rectangle
         shape_big = canvas.create_rectangle(origin_x, origin_y, origin_x + width, origin_y + height, fill=fill_color, outline=stroke_color, width=border_width)
