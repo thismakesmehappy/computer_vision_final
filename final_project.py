@@ -269,7 +269,7 @@ def detect_smile(gray):
         # roi_color = frame[y:y+h, x:x+w]
 
         # Within the grayscale ROI, look for smiles 
-        smiles = smile_cascade.detectMultiScale(roi_gray, 3, 8)
+        smiles = smile_cascade.detectMultiScale(roi_gray, 4, 9)
 
         # If we find smiles then increment our counter
         if len(smiles):
