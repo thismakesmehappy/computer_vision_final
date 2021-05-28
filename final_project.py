@@ -21,7 +21,7 @@ def mirror(window, canvas, canvas_width, canvas_height, columns, rows, spacing, 
     max_flow_tolerance = 1.5
     take_picture = True
     smile_detected = False
-    wink_detected = False
+    blink_detected = False
     total_wait = 1.5
     motion_wait = .1
     bg_colors = ['#FF9999', '#FFFF99', '#99FF99']
@@ -36,12 +36,8 @@ def mirror(window, canvas, canvas_width, canvas_height, columns, rows, spacing, 
     # Adaptive histogram equalization to equalize the color / contrast
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
     # Face detection
-
     detector = dlib.get_frontal_face_detector()
     predictor = dlib.shape_predictor('data/shape_predictor_68_face_landmarks.dat')
-    #these landmarks are based on the image above 
-    left_eye_landmarks = [36, 37, 38, 39, 40, 41]
-    right_eye_landmarks = [42, 43, 44, 45, 46, 47]
     try:
         while True:
             if take_picture:
@@ -56,15 +52,16 @@ def mirror(window, canvas, canvas_width, canvas_height, columns, rows, spacing, 
                 take_picture = False
             if smile_detected:
                 canvas.delete("all")
+                h_multiplier = 1
                 s_multiplier = 1.5
-                v_multiplier = 1.5
+                v_multiplier = 1.75
                 smile_detected = False
-            if wink_detected:
+            if blink_detected:
                 canvas.delete("all")
                 h_multiplier = 1.3
                 s_multiplier = .5
-                v_multiplier = 1.2
-                wink_detected = False
+                v_multiplier = 0.8
+                blink_detected = False
             small_frame = frame = cv2.resize(frame, (resize_width, resize_height), interpolation=cv2.INTER_AREA)
             small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2HSV)
             #shapes = np.empty(shape=(rows, columns, 2))
@@ -90,21 +87,8 @@ def mirror(window, canvas, canvas_width, canvas_height, columns, rows, spacing, 
                     smile_detected = True
                     break
                 
-                # Blink detection
-                faces,_,_ = detector.run(image = gray, upsample_num_times = 0, 
-                       adjust_threshold = 0.0)
-                for face in faces:
-        
-                    landmarks = predictor(gray, face)
-
-                    #-----Step 5: Calculating blink ratio for one eye-----
-                    left_eye_ratio  = get_blink_ratio(left_eye_landmarks, landmarks)
-                    right_eye_ratio = get_blink_ratio(right_eye_landmarks, landmarks)
-                    blink_ratio     = (left_eye_ratio + right_eye_ratio) / 2
-                    if blink_ratio > BLINK_RATIO_THRESHOLD:
-                        #Blink detected! Do Something!
-                        wink_detected = True
-                if wink_detected:
+                if detect_blink(gray, detector, predictor):
+                    blink_detected = True
                     break
 
                 _, frame_looping = cap.read()
@@ -118,6 +102,23 @@ def mirror(window, canvas, canvas_width, canvas_height, columns, rows, spacing, 
                 time.sleep(motion_wait)
     except:
         pass
+
+def detect_blink(gray, detector, predictor):
+    # Adapted from https://medium.com/algoasylum/blink-detection-using-python-737a88893825
+    left_eye_landmarks = [36, 37, 38, 39, 40, 41]
+    right_eye_landmarks = [42, 43, 44, 45, 46, 47]
+    # Blink detection
+    faces,_,_ = detector.run(image = gray, upsample_num_times = 0, adjust_threshold = 0.0)
+    for face in faces:
+        landmarks = predictor(gray, face)
+        #-----Step 5: Calculating blink ratio for one eye-----
+        left_eye_ratio  = get_blink_ratio(left_eye_landmarks, landmarks)
+        right_eye_ratio = get_blink_ratio(right_eye_landmarks, landmarks)
+        blink_ratio     = (left_eye_ratio + right_eye_ratio) / 2
+        if blink_ratio > BLINK_RATIO_THRESHOLD:
+                        #Blink detected! Do Something!
+            return True
+    return False
  
 def midpoint(point1 ,point2):
     return (point1.x + point2.x)/2,(point1.y + point2.y)/2
