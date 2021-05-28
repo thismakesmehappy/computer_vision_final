@@ -7,6 +7,8 @@ from colorutils import hsv_to_hex
 import inspect
 import sys
 import time
+import argparse
+
 
 
 # https://www.geeksforgeeks.org/python-smile-detection-using-opencv/
@@ -206,24 +208,27 @@ def detect_smile(gray):
     return num_smiles > 0
 
 def main():
-
-    CANVAS_WIDTH = 800
-    CANVAS_HEIGHT = 600
-    CANVAS_ORIGIN_X = 00
-    CANVAS_ORIGIN_Y = 00
+    parser = argparse.ArgumentParser(description='Creates pixel art from image capture. Detects motion to determine when to refresh the iamge.')
+    parser.add_argument('--width', type=str, help='Canvas width', default='800')
+    parser.add_argument('--height', type=str, help='Canvas height', default='600')
+    parser.add_argument('--originx', type=str, help='X-position for the canvas', default='0')
+    parser.add_argument('--originy', type=str, help='Y-position for the canvas', default='0')
+    parser.add_argument('--columns', type=str, help='Number of columns in pixel art', default='81')
+    parser.add_argument('--rows', type=str, help='Number of rows in pixel art', default='41')
+    parser.add_argument('--spacing', type=str, help='Space between pixel shapes', default='2')
+    parser.add_argument('--padding', type=str, help='Padding around the window', default='5')
+    args = parser.parse_args()
+    
+    CANVAS_WIDTH = int(args.width)
+    CANVAS_HEIGHT = int(args.height)
+    CANVAS_ORIGIN_X = int(args.originx)
+    CANVAS_ORIGIN_Y = int(args.originy)
     
     TITLE = 'Geomirror'
-    COLUMNS = 88
-    ROWS = 41
-    SPACING = 2
-    WINDOW_PADDING = 5
-
-    # Smile Detection https://www.geeksforgeeks.org/python-smile-detection-using-opencv/
-    # face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades +'haarcascade_frontalface_default.xml')
-    # eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades +'haarcascade_eye.xml')
-    # smile_cascade = cv2.CascadeClassifier(cv2.data.haarcascades +'haarcascade_smile.xml')
-    # faces = face_cascade.detectMultiScale(gray, 1.3, 5)
-
+    COLUMNS = int(args.columns)
+    ROWS = int(args.rows)
+    SPACING = int(args.spacing)
+    WINDOW_PADDING = int(args.padding)
 
     window = create_window(CANVAS_WIDTH, CANVAS_HEIGHT, CANVAS_ORIGIN_X, CANVAS_ORIGIN_Y, TITLE)
     canvas = create_canvas(window, CANVAS_WIDTH, CANVAS_HEIGHT)
