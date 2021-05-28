@@ -14,7 +14,7 @@ import argparse
 # https://www.geeksforgeeks.org/python-smile-detection-using-opencv/
 
 
-def mirror(canvas, canvas_width, canvas_height, columns, rows, spacing, window_padding):
+def mirror(window, canvas, canvas_width, canvas_height, columns, rows, spacing, window_padding):
     resize_height, resize_width = calculate_resize_parameters(rows, columns)
     max_flow_tolerance = 1.5
     take_picture = True
@@ -32,61 +32,67 @@ def mirror(canvas, canvas_width, canvas_height, columns, rows, spacing, window_p
     #_, frame = cap.read()
     # Adaptive histogram equalization to equalize the color / contrast
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-    while True:
-        if take_picture:
-            canvas.delete("all")
-            _, frame = cap.read()
-            lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
-            lab = cv2.split(frame)
-            lab[0] = clahe.apply(lab[0])
-            lab[1] = clahe.apply(lab[1])
-            lab[2] = clahe.apply(lab[2])
-            frame = cv2.merge(lab)
-            take_picture = False
-        if smile_detected:
-            canvas.delete("all")
-            s_multiplier = 1.5
-            v_multiplier = 1.5
-            smile_detected = False
-        small_frame = frame = cv2.resize(frame, (resize_width, resize_height), interpolation=cv2.INTER_AREA)
-        small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2HSV)
-        #shapes = np.empty(shape=(rows, columns, 2))
-
-        draw_grid_of_shapes(canvas_width, canvas_height, columns, rows, spacing, window_padding, canvas, small_frame, h_multiplier, s_multiplier, v_multiplier)
-        h_multiplier = s_multiplier = v_multiplier = 1
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        gray = clahe.apply(gray)
-        gray = cv2.resize(gray, (480, 320), interpolation = cv2.INTER_AREA)
-        avg_flow = 0
+    try:
         while True:
-            canvas.update()
-            #TODO: Solve _tkinter.TclError: can't invoke "update" command: application has been destroyed
-            key = cv2.waitKey(1)
-            if key == 27 or key == ord('q') or key == ('Q'): # exit on ESC
-                sys.exit()
-            if avg_flow > max_flow_tolerance:
-                take_picture = True
-                for color in bg_colors:
-                    canvas.configure(background=color)
-                    canvas.update()
-                    individual_wait = total_wait / len(bg_colors)
-                    time.sleep(individual_wait)
-                canvas.configure(background='#FFFFFF')
-                break
-            if detect_smile(gray):
-                smile_detected = True
-                break
-            _, frame_looping = cap.read()
-            prev_gray = gray
-            # Our operations on the frame come here
-            gray = cv2.cvtColor(frame_looping, cv2.COLOR_BGR2GRAY)
+            if take_picture:
+                canvas.delete("all")
+                _, frame = cap.read()
+                lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
+                lab = cv2.split(frame)
+                lab[0] = clahe.apply(lab[0])
+                lab[1] = clahe.apply(lab[1])
+                lab[2] = clahe.apply(lab[2])
+                frame = cv2.merge(lab)
+                take_picture = False
+            if smile_detected:
+                canvas.delete("all")
+                s_multiplier = 1.5
+                v_multiplier = 1.5
+                smile_detected = False
+            small_frame = frame = cv2.resize(frame, (resize_width, resize_height), interpolation=cv2.INTER_AREA)
+            small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2HSV)
+            #shapes = np.empty(shape=(rows, columns, 2))
+
+            draw_grid_of_shapes(canvas_width, canvas_height, columns, rows, spacing, window_padding, canvas, small_frame, h_multiplier, s_multiplier, v_multiplier)
+            h_multiplier = s_multiplier = v_multiplier = 1
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             gray = clahe.apply(gray)
             gray = cv2.resize(gray, (480, 320), interpolation = cv2.INTER_AREA)
-            flow = np.array(cv2.calcOpticalFlowFarneback(prev_gray, gray, None, 0.5, 3, 15, 3, 5, 1.2, 0))
-            avg_flow = np.average(flow)
-            time.sleep(motion_wait)
+            avg_flow = 0
+            while True:
+                window.update()
+                if avg_flow > max_flow_tolerance:
+                    take_picture = True
+                    for color in bg_colors:
+                        canvas.configure(background=color)
+                        window.update()
+                        individual_wait = total_wait / len(bg_colors)
+                        time.sleep(individual_wait)
+                    canvas.configure(background='#FFFFFF')
+                    break
+                if detect_smile(gray):
+                    smile_detected = True
+                    break
+                _, frame_looping = cap.read()
+                prev_gray = gray
+                # Our operations on the frame come here
+                gray = cv2.cvtColor(frame_looping, cv2.COLOR_BGR2GRAY)
+                gray = clahe.apply(gray)
+                gray = cv2.resize(gray, (480, 320), interpolation = cv2.INTER_AREA)
+                flow = np.array(cv2.calcOpticalFlowFarneback(prev_gray, gray, None, 0.5, 3, 15, 3, 5, 1.2, 0))
+                avg_flow = np.average(flow)
+                time.sleep(motion_wait)
+    except:
+        pass
  
-    
+def key(event):
+    print(event.char)
+    if event.char == 'q':
+        print('yep')
+    elif len(event.char) == 1:
+        msg = 'Punctuation Key %r (%r)' % (event.keysym, event.char)
+    else:
+        msg = 'Special Key %r' % event.keysym
 
 def draw_grid_of_shapes(canvas_width, canvas_height, columns, rows, spacing, window_padding, canvas, small_frame, h_multiplier=1, s_multiplier=1, v_multiplier=1):
     for row in range(rows):
@@ -126,9 +132,7 @@ def draw_random_shape(canvas, width, height, origin_y, origin_x, middle_x, middl
     small_height = height / shrink_factor
     small_origin_x = middle_x - small_width / 2
     small_origin_y = middle_y - small_height / 2
-    # TODO: Correct the math so when it rounds pixels it's evenly centered
 
-    # TODO: Shift triangles so the look more centered
     if random_shape == 0: # Diamond
         shape_big = canvas.create_polygon([middle_x, origin_y, origin_x + width, middle_y, middle_x, origin_y + height, origin_x, middle_y], fill=fill_color, outline=stroke_color, width=border_width)
         shape_small = canvas.create_polygon([middle_x, small_origin_y, small_origin_x + small_width, middle_y, middle_x, small_origin_y + small_height, small_origin_x, middle_y], fill=stroke_color, width=0)
@@ -237,7 +241,8 @@ def main():
     window = create_window(CANVAS_WIDTH, CANVAS_HEIGHT, CANVAS_ORIGIN_X, CANVAS_ORIGIN_Y, TITLE)
     canvas = create_canvas(window, CANVAS_WIDTH, CANVAS_HEIGHT)
 
-    mirror(canvas, CANVAS_WIDTH, CANVAS_HEIGHT, COLUMNS, ROWS, SPACING, WINDOW_PADDING)
+    window.bind_all('<Escape>', lambda x: window.destroy())
+    mirror(window, canvas, CANVAS_WIDTH, CANVAS_HEIGHT, COLUMNS, ROWS, SPACING, WINDOW_PADDING)
 
 
 if __name__ == '__main__':
