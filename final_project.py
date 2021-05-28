@@ -34,19 +34,26 @@ def mirror(canvas, canvas_width, canvas_height, columns, rows, spacing, window):
     # The first photo tends to be darker, so we're taking a couple of photos 
     #   before entering the loop to "warm up" the camera
     _, frame = cap.read()
-    time.sleep(.05)
-    _, frame = cap.read()
+    #time.sleep(.05)
+    #_, frame = cap.read()
+    # Adaptive histogram equalization to equalize the color / contrast
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
     while True:
         if take_picture:
             canvas.delete("all")
             _, frame = cap.read()
+            lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
+            lab = cv2.split(frame)
+            lab[0] = clahe.apply(lab[0])
+            lab[1] = clahe.apply(lab[1])
+            lab[2] = clahe.apply(lab[2])
+            frame = cv2.merge(lab)
             take_picture = False
         if smile_detected:
             canvas.delete("all")
             s_multiplier = 1.5
             v_multiplier = 1.5
             smile_detected = False
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         small_frame = frame = cv2.resize(frame, (resize_width, resize_height), interpolation=cv2.INTER_AREA)
         small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2HSV)
         shapes = np.empty(shape=(rows, columns, 2))
@@ -54,6 +61,7 @@ def mirror(canvas, canvas_width, canvas_height, columns, rows, spacing, window):
         draw_grid_of_shapes(canvas_width, canvas_height, columns, rows, spacing, shape_width, shape_height, canvas, small_frame, shapes, h_multiplier, s_multiplier, v_multiplier)
         h_multiplier = s_multiplier = v_multiplier = 1
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        gray = clahe.apply(gray)
         gray = cv2.resize(gray, (480, 320), interpolation = cv2.INTER_AREA)
         avg_flow = 0
         while True:
@@ -81,6 +89,7 @@ def mirror(canvas, canvas_width, canvas_height, columns, rows, spacing, window):
             prev_gray = gray
             # Our operations on the frame come here
             gray = cv2.cvtColor(frame_looping, cv2.COLOR_BGR2GRAY)
+            gray = clahe.apply(gray)
             gray = cv2.resize(gray, (480, 320), interpolation = cv2.INTER_AREA)
             flow = np.array(cv2.calcOpticalFlowFarneback(prev_gray, gray, None, 0.5, 3, 15, 3, 5, 1.2, 0))
             avg_flow = np.average(flow)
@@ -196,7 +205,7 @@ def detect_smile(gray):
         # roi_color = frame[y:y+h, x:x+w]
 
         # Within the grayscale ROI, look for smiles 
-        smiles = smile_cascade.detectMultiScale(roi_gray, 8, 7)
+        smiles = smile_cascade.detectMultiScale(roi_gray, 4, 6)
 
         # If we find smiles then increment our counter
         if len(smiles):
