@@ -4,8 +4,6 @@ import cv2
 import numpy as np
 from colorsys import rgb_to_hsv, hsv_to_rgb
 from colorutils import hsv_to_hex
-import inspect
-import sys
 import time
 import argparse
 import dlib
@@ -17,6 +15,19 @@ BLINK_RATIO_THRESHOLD = 9
 
 
 def mirror(window, canvas, canvas_width, canvas_height, columns, rows, spacing, window_padding):
+    '''
+    This is the main function for this program. We first load the necessary data for facial feature recognition and initialized our image capture. We have two nexted loops The larger one is an infinite loop that takes the photo, downsamples it to obtain the right pixels for the pixel art, and then translats the image into a grid of shapes with the corresponding colors. In this larger loop we also determine the HSV modifiers for the output graphic depending on whether the person smiled or blinked. The inner loop is also an infinite loop that determines if there is enough flow, if the person smiled, or blinked. If any of these actions happen, we go back to the outer loop and take the appropriate action (take a new picture if there was enough flow, brighten the image if there was a smile, or darken the image if there was a wink) and repeat the process.
+    Args:
+        window (Tkinter window): The parent container for the pixel art
+        canvas (Tkinter Canvas): Canvas to hold the shapes we'll draw
+        canvas_width, canvas height (int): The width and height of the canvas
+        columns, rows (int): the number of columns and rows in the output pixel art
+        spacing (int): number of pixels between each row or column
+        window_padding (int): blank space between the shapes and the borders of the window
+    Returns:
+        Renders the pixel art in the window
+    '''
+    # Determine the dimensions of the 
     resize_height, resize_width = calculate_resize_parameters(rows, columns)
     max_flow_tolerance = 1.5
     take_picture = True
@@ -26,6 +37,13 @@ def mirror(window, canvas, canvas_width, canvas_height, columns, rows, spacing, 
     motion_wait = .1
     bg_colors = ['#FF9999', '#FFFF99', '#99FF99']
     h_multiplier = s_multiplier = v_multiplier = 1
+    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades +'haarcascade_frontalface_default.xml')
+    smile_cascade = cv2.CascadeClassifier(cv2.data.haarcascades +'haarcascade_smile.xml')
+    # Adaptive histogram equalization to equalize the color / contrast
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    # Face detection
+    detector = dlib.get_frontal_face_detector()
+    predictor = dlib.shape_predictor('data/shape_predictor_68_face_landmarks.dat')
     
     cap = cv2.VideoCapture(0)
     # The first photo tends to be darker, so we're taking a couple of photos 
@@ -33,11 +51,7 @@ def mirror(window, canvas, canvas_width, canvas_height, columns, rows, spacing, 
     _, frame = cap.read()
     time.sleep(.05)
     _, frame = cap.read()
-    # Adaptive histogram equalization to equalize the color / contrast
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-    # Face detection
-    detector = dlib.get_frontal_face_detector()
-    predictor = dlib.shape_predictor('data/shape_predictor_68_face_landmarks.dat')
+
     try:
         while True:
             if take_picture:
@@ -73,6 +87,7 @@ def mirror(window, canvas, canvas_width, canvas_height, columns, rows, spacing, 
             gray = cv2.resize(gray, (480, 320), interpolation = cv2.INTER_AREA)
             avg_flow = 0
             while True:
+                cv2.imshow('grayscale', gray)
                 window.update()
                 if avg_flow > max_flow_tolerance:
                     take_picture = True
@@ -83,7 +98,7 @@ def mirror(window, canvas, canvas_width, canvas_height, columns, rows, spacing, 
                         time.sleep(individual_wait)
                     canvas.configure(background='#FFFFFF')
                     break
-                if detect_smile(gray):
+                if detect_smile(gray, face_cascade, smile_cascade):
                     smile_detected = True
                     break
                 
@@ -95,7 +110,7 @@ def mirror(window, canvas, canvas_width, canvas_height, columns, rows, spacing, 
                 prev_gray = gray
                 # Our operations on the frame come here
                 gray = cv2.cvtColor(frame_looping, cv2.COLOR_BGR2GRAY)
-                gray = clahe.apply(gray)
+                #gray = clahe.apply(gray)
                 gray = cv2.resize(gray, (480, 320), interpolation = cv2.INTER_AREA)
                 flow = np.array(cv2.calcOpticalFlowFarneback(prev_gray, gray, None, 0.5, 3, 15, 3, 5, 1.2, 0))
                 avg_flow = np.average(flow)
@@ -157,9 +172,13 @@ def key(event):
         msg = 'Special Key %r' % event.keysym
 
 def draw_grid_of_shapes(canvas_width, canvas_height, columns, rows, spacing, window_padding, canvas, small_frame, h_multiplier=1, s_multiplier=1, v_multiplier=1):
+    image_height = small_frame.shape[0]
+    image_width = small_frame.shape[1]
+    start_row = (image_height - rows) // 2
+    start_column = (image_width - columns) // 2
     for row in range(rows):
         for column in range(columns):
-            fill_hsv = small_frame[row][column]
+            fill_hsv = small_frame[row + start_row][column + start_column]
             fill_h = (int(fill_hsv[0] * 2) * abs(h_multiplier)) % 360
             fill_s = min((fill_hsv[1] / 255) * abs(s_multiplier), 1)
             fill_v = min((fill_hsv[2] / 255) * abs(v_multiplier), 1)
@@ -252,11 +271,10 @@ def create_canvas(window, canvas_width, canvas_height):
     canvas.pack(fill="both", expand=True)
     return canvas
 
-def detect_smile(gray):
+def detect_smile(gray, face_cascade, smile_cascade):
     # Adapted from https://dev.to/hammertoe/smile-detector-using-opencv-to-detect-smiling-faces-in-a-video-4l80
     # detect faces within the greyscale version of the frame
-    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades +'haarcascade_frontalface_default.xml')
-    smile_cascade = cv2.CascadeClassifier(cv2.data.haarcascades +'haarcascade_smile.xml')
+
     faces = face_cascade.detectMultiScale(gray, 1.1, 3)
     num_smiles = 0
 
