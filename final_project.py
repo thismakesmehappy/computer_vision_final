@@ -1,3 +1,36 @@
+###############################################################################
+## Createsd pixel art from video captured from camera. Uses flow to detect 
+## motion; when a certain average flow is perceiced, the image is updated. 
+## Also inludes blik and smile detection to modify the pizel art.
+###############################################################################
+## N/A License info
+###############################################################################
+## Author: Bernardo Margulis
+## Copyright: Copyright 2021, Geomirror
+## Credits: [Bernardo MArgulis]
+## License: N/A
+## Version: 0.1.0
+## Maintainer: Bernardo Margulis
+## Email: bernardo@thismakesmehappy.co
+## Status: Dev
+##################################################
+
+'''
+Usage:
+All arguments are optional, defaults are provided for each parameter, and 
+all arguments will be casted to ints
+python final_project.py --width canvas_width --height canvas_height 
+    --originx window_left_distance --originy window_top_distance
+    --columns columns_in_pixel_art  --rows rows_in_pixel_art
+    --spacing space_between_rows_or_columnts    --border shape_border_width
+    --padding padding_around_the_window
+
+More rows and columns will slow down the program. Lower rows and columns will
+yield more interesting results, particularly if one argument is low (below 15)
+and the other is high (over 30)
+'''
+
+
 import tkinter #Tk, Canvas, Frame, BOTH, ARC
 import random
 import cv2
@@ -9,7 +42,17 @@ import argparse
 import dlib
 import math
 import traceback
-BLINK_RATIO_THRESHOLD = 9
+
+def calculate_fill_and_stroke_color(pixel_hsv, h_multiplier, s_multiplier, v_multiplier):
+    fill_h = (int(pixel_hsv[0] * 2) * abs(h_multiplier)) % 360
+    fill_s = min((pixel_hsv[1] / 255) * abs(s_multiplier), 1)
+    fill_v = min((pixel_hsv[2] / 255) * abs(v_multiplier), 1)
+    stroke_h = (fill_h * abs(h_multiplier)) % 360
+    stroke_s = min(fill_s * .75 * abs(s_multiplier), 1)
+    stroke_v = min(fill_v * .25 * abs(v_multiplier), 1)
+    fill_color = hsv_to_hex((fill_h, fill_s, fill_v))
+    stroke_color = hsv_to_hex((stroke_h, stroke_s, stroke_v))
+    return fill_color, stroke_color
 
 def calculate_image_size_and_place(row, column, rows, columns, canvas_height, canvas_width, spacing, window_padding):
     '''
@@ -21,7 +64,8 @@ def calculate_image_size_and_place(row, column, rows, columns, canvas_height, ca
         spacing (int): spacing between rows and columns
         window_padding (int): spacing between the shapes and the window
     Returns:
-        the locaition and dimentions of the shape
+        origin_y, origin_x (ints): top and left location of the shape
+        shape_height, shape_width (ints): height and width for the shape
     '''
 
     shape_width = ((canvas_width - 2 * window_padding) / columns) - spacing
@@ -42,15 +86,15 @@ def calculate_resize_parameters(rows, columns):
     Args:
         rows, columns (ints): Rows and columns for the pixel art
     Returns:
-        ints with the width and height to resize the image proportionally
+        resize_height, resize_width (ints): height and width for the resized
+            image to keep it proportional to the original
     '''
     cap = cv2.VideoCapture(0)
     capture_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     capture_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    width_resized = (rows * capture_width) // capture_height
-    if width_resized > columns:
+    resize_width = (rows * capture_width) // capture_height
+    if resize_width > columns:
         resize_height = rows
-        resize_width = width_resized
     else:
         resize_height = (columns * capture_height) // capture_width
         resize_width = columns
@@ -58,7 +102,7 @@ def calculate_resize_parameters(rows, columns):
 
 def create_canvas(window, canvas_width, canvas_height):
     '''
-    Initialies a Tkinter canvas
+    Initializes a Tkinter canvas
     Args:
         window: the parent window object
         canvas_width, canvas_height (ints): canvas dimetnions
@@ -74,9 +118,9 @@ def create_canvas(window, canvas_width, canvas_height):
 
 def create_window(window_width, window_height, window_origin_x, window_origin_y, title):
     '''
-    Initialies a Tkinter window
+    Initializes a Tkinter window
     Args:
-        window_width, window_height (ints): window dimetnions
+        window_width, window_height (ints): window dimentions
         window_origin_x, window_origin_y (ints): placement for the canvas
         title (str): the title of the window
     Returns:
@@ -86,7 +130,6 @@ def create_window(window_width, window_height, window_origin_x, window_origin_y,
     geo = f'{window_width}x{window_height}+{window_origin_x}+{window_origin_y}' 
     window = tkinter.Tk()
     window.title(title)
-    # Uses python 3.6+ string interpolation
     window.geometry(geo)
     return window
 
@@ -102,6 +145,7 @@ def detect_blink(gray, detector, predictor):
     Returns:
         True if a blink was detected, False if not
     '''
+    blink_ration_threshold = 9
     left_eye_landmarks = [36, 37, 38, 39, 40, 41]
     right_eye_landmarks = [42, 43, 44, 45, 46, 47]
     # Blink detection
@@ -111,7 +155,7 @@ def detect_blink(gray, detector, predictor):
         left_eye_ratio  = get_blink_ratio(left_eye_landmarks, landmarks)
         right_eye_ratio = get_blink_ratio(right_eye_landmarks, landmarks)
         blink_ratio     = (left_eye_ratio + right_eye_ratio) / 2
-        if blink_ratio > BLINK_RATIO_THRESHOLD:
+        if blink_ratio > blink_ration_threshold:
                         #Blink detected! Do Something!
             return True
     return False
@@ -147,19 +191,19 @@ def detect_smile(gray, face_cascade, smile_cascade):
 
     return False
 
-def draw_grid_of_shapes(canvas_width, canvas_height, rows, columns, spacing, window_padding, canvas, small_frame, border, h_multiplier=1, s_multiplier=1, v_multiplier=1):
+def draw_grid_of_shapes(canvas, small_frame, rows, columns, canvas_height, canvas_width, spacing, window_padding, border, h_multiplier=1, s_multiplier=1, v_multiplier=1):
     '''
     Produces a grid of shapes that corresponds to the pixels in the resized 
     image to produce the pixel art. This function will determine the color of
     each pixel, process it if necessary, and will put a shape in each 
     position corresponding to the pixel
     Args:
-        canvas_width, canvas_height (ints): Canvas dimentions
-        rows, columns (ints): Number of rows and columns in the pixel art
-        spacing (int): number of pixels between each row or column
-        window_padding (int): spacing between the window borders and the shapes
         canvas (Tkinter canvas): canvas where we'll draw the shapes
         small_frame (image): resized image to translate into pixel art
+        rows, columns (ints): Number of rows and columns in the pixel art
+        canvas_height, canvas_width (ints): Canvas dimentions
+        spacing (int): number of pixels between each row or column
+        window_padding (int): spacing between the window borders and the shapes
         border (int): border width
         h_miltiplier, s_miltiplier, v_multiplier (ints): multipliers to 
             modify the HSV values if needed
@@ -179,15 +223,8 @@ def draw_grid_of_shapes(canvas_width, canvas_height, rows, columns, spacing, win
     #   corresponding shape with its color
     for row in range(rows):
         for column in range(columns):
-            fill_hsv = small_frame[row + start_row][column + start_column]
-            fill_h = (int(fill_hsv[0] * 2) * abs(h_multiplier)) % 360
-            fill_s = min((fill_hsv[1] / 255) * abs(s_multiplier), 1)
-            fill_v = min((fill_hsv[2] / 255) * abs(v_multiplier), 1)
-            stroke_h = (fill_h * abs(h_multiplier)) % 360
-            stroke_s = min(fill_s * .75 * abs(s_multiplier), 1)
-            stroke_v = min(fill_v * .25 * abs(v_multiplier), 1)
-            fill_color = hsv_to_hex((fill_h, fill_s, fill_v))
-            stroke_color = hsv_to_hex((stroke_h, stroke_s, stroke_v))
+            pixel_hsv = small_frame[row + start_row][column + start_column]
+            fill_color, stroke_color = calculate_fill_and_stroke_color(pixel_hsv, h_multiplier, s_multiplier, v_multiplier)
             origin_y, origin_x, shape_width, shape_height = calculate_image_size_and_place(row, column, rows, columns, canvas_height, canvas_width, spacing, window_padding)
             draw_random_shape(canvas, shape_width, shape_height, origin_y, origin_x, border, fill_color=fill_color, stroke_color=stroke_color)
 
@@ -281,7 +318,8 @@ def get_blink_ratio(eye_points, facial_landmarks):
         eye_points (list of ints): indexes for the features around each eye
         facial_landmarks: Trained data for the feature predictor
     Returns:
-        Int
+        ration (int): ration between the average of both eye's horizontal length 
+            and the average of both eye's vertical length 
     '''
     
     #loading all the required points
@@ -314,7 +352,7 @@ def midpoint(point1 ,point2):
     '''
     return (point1.x + point2.x)/2,(point1.y + point2.y)/2
 
-def mirror(window, canvas, canvas_width, canvas_height, columns, rows, spacing, window_padding, border):
+def mirror(window, canvas, columns, rows, canvas_height, canvas_width, spacing, window_padding, border):
     '''
     This is the main function for this program. We first load the necessary data for facial feature recognition and initialized our image capture. We have two nexted loops The larger one is an infinite loop that takes the photo, downsamples it to obtain the right pixels for the pixel art, and then translats the image into a grid of shapes with the corresponding colors. In this larger loop we also determine the HSV modifiers for the output graphic depending on whether the person smiled or blinked. The inner loop is also an infinite loop that determines if there is enough flow, if the person smiled, or blinked. If any of these actions happen, we go back to the outer loop and take the appropriate action (take a new picture if there was enough flow, brighten the image if there was a smile, or darken the image if there was a wink) and repeat the process.
     Args:
@@ -334,9 +372,17 @@ def mirror(window, canvas, canvas_width, canvas_height, columns, rows, spacing, 
     take_picture = True
     smile_detected = False
     blink_detected = False
-    total_wait = 1.5
-    motion_wait = .1
+    # We will give the user a visual signal before taking a new image (by 
+    #   changing the background color); this will be the total time for those
+    #   signals
+    total_signal_time = 1.5
+    # We can specify the different levels of visual signal by indicating which
+    #   colors to change thee background before taking a new imagr
     bg_colors = ['#FF9999', '#FFFF99', '#99FF99']
+    # We'll delay the capture to reduce computation time
+    capture_delay = .1
+    # Multipliers to change the colors in the pixel art. Each value corresponds
+    #   to Hue, Saturation, Value (HSV) resepectively
     h_multiplier = s_multiplier = v_multiplier = 1
     # Load data for the face classifier to recognize a smile
     face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades +'haarcascade_frontalface_default.xml')
@@ -380,7 +426,7 @@ def mirror(window, canvas, canvas_width, canvas_height, columns, rows, spacing, 
             small_frame = cv2.resize(frame, (resize_width, resize_height), interpolation=cv2.INTER_AREA)
             small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2HSV)
 
-            draw_grid_of_shapes(canvas_width, canvas_height, rows, columns, spacing, window_padding, canvas, small_frame, border, h_multiplier, s_multiplier, v_multiplier)
+            draw_grid_of_shapes(canvas, small_frame, rows, columns, canvas_height, canvas_width, spacing, window_padding, border, h_multiplier, s_multiplier, v_multiplier)
             h_multiplier = s_multiplier = v_multiplier = 1
             
             # Convert the image to grayscale to measure the flow. Within the 
@@ -404,7 +450,7 @@ def mirror(window, canvas, canvas_width, canvas_height, columns, rows, spacing, 
                     for color in bg_colors:
                         canvas.configure(background=color)
                         window.update()
-                        individual_wait = total_wait / len(bg_colors)
+                        individual_wait = total_signal_time / len(bg_colors)
                         time.sleep(individual_wait)
                     canvas.configure(background='#FFFFFF')
                     break
@@ -431,10 +477,10 @@ def mirror(window, canvas, canvas_width, canvas_height, columns, rows, spacing, 
                 avg_flow = np.average(flow)
 
                 # We're waiting a fraction of a second to reduce the computational cost
-                time.sleep(motion_wait)
+                time.sleep(capture_delay)
     except:
-    #    pass
-        traceback.print_exc()
+        pass
+        #traceback.print_exc()
 
 def main():
     '''
@@ -471,7 +517,7 @@ def main():
     # Detect if the escape key was pressed, if so exit
     window.bind_all('<Escape>', lambda x: window.destroy())
     # Run main loop
-    mirror(window, canvas, CANVAS_WIDTH, CANVAS_HEIGHT, COLUMNS, ROWS, SPACING, WINDOW_PADDING, BORDER_WIDTH)
+    mirror(window, canvas, COLUMNS, ROWS, CANVAS_HEIGHT, CANVAS_WIDTH, SPACING, WINDOW_PADDING, BORDER_WIDTH)
 
 
 if __name__ == '__main__':
