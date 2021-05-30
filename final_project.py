@@ -23,11 +23,13 @@ python final_project.py --width canvas_width --height canvas_height
     --originx window_left_distance --originy window_top_distance
     --columns columns_in_pixel_art  --rows rows_in_pixel_art
     --spacing space_between_rows_or_columnts    --border shape_border_width
-    --padding padding_around_the_window
+    --padding padding_around_the_window --smile scale_factor,min_nearest_neighbors
+    --blink blink_ratio_threshold --flow average_flow
 
 More rows and columns will slow down the program. Lower rows and columns will
 yield more interesting results, particularly if one argument is low (below 15)
-and the other is high (over 30)
+and the other is high (over 40). For lower rows and columns, a higher border and
+spacing will look more interesting.
 '''
 
 
@@ -133,7 +135,7 @@ def create_window(window_width, window_height, window_origin_x, window_origin_y,
     window.geometry(geo)
     return window
 
-def detect_blink(gray, detector, predictor):
+def detect_blink(gray, detector, predictor, blink):
     '''
     Determine if the user blinked
     # Adapted from https://medium.com/algoasylum/blink-detection-using-python-737a88893825
@@ -142,10 +144,11 @@ def detect_blink(gray, detector, predictor):
         detector: detector object (we inject it to avoid loading it multiple times)
         predictor: trained data to detect blinkcs (we inkect it to avoit loading
             it multiple times)
+        blink (int): Blink Ratio Threshold
     Returns:
         True if a blink was detected, False if not
     '''
-    blink_ration_threshold = 9
+    blink_ratio_threshold = blink
     left_eye_landmarks = [36, 37, 38, 39, 40, 41]
     right_eye_landmarks = [42, 43, 44, 45, 46, 47]
     # Blink detection
@@ -155,25 +158,26 @@ def detect_blink(gray, detector, predictor):
         left_eye_ratio  = get_blink_ratio(left_eye_landmarks, landmarks)
         right_eye_ratio = get_blink_ratio(right_eye_landmarks, landmarks)
         blink_ratio     = (left_eye_ratio + right_eye_ratio) / 2
-        if blink_ratio > blink_ration_threshold:
+        if blink_ratio > blink_ratio_threshold:
                         #Blink detected! Do Something!
             return True
     return False
 
-def detect_smile(gray, face_cascade, smile_cascade):
+def detect_smile(gray, face_cascade, smile_cascade, smile):
     '''
     Detect if the user smiled
-    # Adapted from https://dev.to/hammertoe/smile-detector-using-opencv-to-detect-smiling-faces-in-a-video-4l80
+    Adapted from https://dev.to/hammertoe/smile-detector-using-opencv-to-detect-smiling-faces-in-a-video-4l80
     Args:
         gray: graysfale image
         face_cascade, smile_cascade: trained data for cascade detectors
+        smile (tuple of ints): scale factor and minimum neighbors to detect
+            the smile
     Returns: 
         True if a smile was detected, False otherwise
     '''
     # detect faces within the greyscale version of the frame
 
     faces = face_cascade.detectMultiScale(gray, 1.1, 3)
-
     # For each face we find...
     for (x, y, w, h) in faces:
 
@@ -183,7 +187,7 @@ def detect_smile(gray, face_cascade, smile_cascade):
         # roi_color = frame[y:y+h, x:x+w]
 
         # Within the grayscale ROI, look for smiles 
-        smiles = smile_cascade.detectMultiScale(roi_gray, 4, 9)
+        smiles = smile_cascade.detectMultiScale(roi_gray, smile[0], smile[1])
 
         # If we find smiles then increment our counter
         if len(smiles):
@@ -248,11 +252,11 @@ def draw_random_shape(canvas, width, height, origin_y, origin_x, border,fill_col
     middle_x = origin_x + (width / 2)
     middle_y = origin_y + (height / 2)
     border
-    shrink_factor = 3
+    shrink_factor = 5
     small_width = width / shrink_factor
     small_height = height / shrink_factor
-    small_origin_x = middle_x - small_width / 2
-    small_origin_y = middle_y - small_height / 2
+    small_origin_x = origin_x + width * (1 - (1 / shrink_factor)) / 2
+    small_origin_y = origin_y + height * (1 - (1 / shrink_factor)) / 2
 
     # Draw a random number to determine which shape will be drawn
     random_shape = random.randint(0, 6)
@@ -352,7 +356,7 @@ def midpoint(point1 ,point2):
     '''
     return (point1.x + point2.x)/2,(point1.y + point2.y)/2
 
-def mirror(window, canvas, columns, rows, canvas_height, canvas_width, spacing, window_padding, border):
+def mirror(window, canvas, columns, rows, canvas_height, canvas_width, spacing, window_padding, border, smile, blink, flow, fps):
     '''
     This is the main function for this program. We first load the necessary data for facial feature recognition and initialized our image capture. We have two nexted loops The larger one is an infinite loop that takes the photo, downsamples it to obtain the right pixels for the pixel art, and then translats the image into a grid of shapes with the corresponding colors. In this larger loop we also determine the HSV modifiers for the output graphic depending on whether the person smiled or blinked. The inner loop is also an infinite loop that determines if there is enough flow, if the person smiled, or blinked. If any of these actions happen, we go back to the outer loop and take the appropriate action (take a new picture if there was enough flow, brighten the image if there was a smile, or darken the image if there was a wink) and repeat the process.
     Args:
@@ -368,7 +372,7 @@ def mirror(window, canvas, columns, rows, canvas_height, canvas_width, spacing, 
     # Determine the dimensions to resize the image based on the rows and columnts
     resize_height, resize_width = calculate_resize_parameters(rows, columns)
 
-    max_flow_tolerance = 1.5
+    max_flow_tolerance = flow
     take_picture = True
     smile_detected = False
     blink_detected = False
@@ -380,7 +384,7 @@ def mirror(window, canvas, columns, rows, canvas_height, canvas_width, spacing, 
     #   colors to change thee background before taking a new imagr
     bg_colors = ['#FF9999', '#FFFF99', '#99FF99']
     # We'll delay the capture to reduce computation time
-    capture_delay = .1
+    capture_delay = (1/fps)
     # Multipliers to change the colors in the pixel art. Each value corresponds
     #   to Hue, Saturation, Value (HSV) resepectively
     h_multiplier = s_multiplier = v_multiplier = 1
@@ -434,7 +438,7 @@ def mirror(window, canvas, columns, rows, canvas_height, canvas_width, spacing, 
             #   grayscale frame to calculate the flow. We resize the image to
             #   reduce the computational cost of calculating flow
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            gray = cv2.resize(gray, (480, 320), interpolation = cv2.INTER_AREA)
+            gray = cv2.resize(gray, (600, 400), interpolation = cv2.INTER_AREA)
 
             # We initiallize the flow to 0 because we currently only have one  
             #   image, but once we complete the following loop we will have two
@@ -457,11 +461,11 @@ def mirror(window, canvas, columns, rows, canvas_height, canvas_width, spacing, 
 
                 # Detect a smile or blink, change the flag for either event,
                 #   and exit the inner loop
-                if detect_smile(gray, face_cascade, smile_cascade):
+                if detect_smile(gray, face_cascade, smile_cascade, smile):
                     smile_detected = True
                     break
                 
-                if detect_blink(gray, detector, predictor):
+                if detect_blink(gray, detector, predictor, blink):
                     blink_detected = True
                     break
                 
@@ -472,7 +476,7 @@ def mirror(window, canvas, columns, rows, canvas_height, canvas_width, spacing, 
                 prev_gray = gray
                 # Our operations on the frame come here
                 gray = cv2.cvtColor(frame_looping, cv2.COLOR_BGR2GRAY)
-                gray = cv2.resize(gray, (480, 320), interpolation = cv2.INTER_AREA)
+                gray = cv2.resize(gray, (600, 400), interpolation = cv2.INTER_AREA)
                 flow = np.array(cv2.calcOpticalFlowFarneback(prev_gray, gray, None, 0.5, 3, 15, 3, 5, 1.2, 0))
                 avg_flow = np.average(flow)
 
@@ -480,7 +484,7 @@ def mirror(window, canvas, columns, rows, canvas_height, canvas_width, spacing, 
                 time.sleep(capture_delay)
     except:
         pass
-        #traceback.print_exc()
+        # traceback.print_exc()
 
 def main():
     '''
@@ -498,6 +502,10 @@ def main():
     parser.add_argument('--spacing', type=str, help='Space between pixel shapes', default='2')
     parser.add_argument('--border', type=str, help='Boder width', default='1')
     parser.add_argument('--padding', type=str, help='Padding around the window', default='5')
+    parser.add_argument('--smile', type=str, help='Adjust sensibility for smile detector', default='4,9')
+    parser.add_argument('--blink', type=str, help='Adjust sensibility for blink detector', default='7')
+    parser.add_argument('--flow', type=str, help='Adjust sensibility for flow', default='1.5')
+    parser.add_argument('--fps', type=str, help='Adjust sensibility for flow', default='12')
     args = parser.parse_args()
     
     CANVAS_WIDTH = int(args.width)
@@ -509,6 +517,11 @@ def main():
     SPACING = int(args.spacing)
     WINDOW_PADDING = int(args.padding)
     BORDER_WIDTH = int(args.border)
+    smile_arg = args.smile.split(',')
+    SMILE = (int(smile_arg[0]), int(smile_arg[1]))
+    BLINK = int(args.blink)
+    FLOW = float(args.flow)
+    FPS = int(args.fps)
     TITLE = 'Geomirror'
 
     # Initialize window and canvas
@@ -517,7 +530,7 @@ def main():
     # Detect if the escape key was pressed, if so exit
     window.bind_all('<Escape>', lambda x: window.destroy())
     # Run main loop
-    mirror(window, canvas, COLUMNS, ROWS, CANVAS_HEIGHT, CANVAS_WIDTH, SPACING, WINDOW_PADDING, BORDER_WIDTH)
+    mirror(window, canvas, COLUMNS, ROWS, CANVAS_HEIGHT, CANVAS_WIDTH, SPACING, WINDOW_PADDING, BORDER_WIDTH, SMILE, BLINK, FLOW, FPS)
 
 
 if __name__ == '__main__':
