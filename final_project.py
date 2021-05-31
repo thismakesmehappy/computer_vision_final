@@ -505,7 +505,7 @@ def main():
     parser.add_argument('--smile', type=str, help='Adjust sensibility for smile detector', default='4,9')
     parser.add_argument('--blink', type=str, help='Adjust sensibility for blink detector', default='7')
     parser.add_argument('--flow', type=str, help='Adjust sensibility for flow', default='1.5')
-    parser.add_argument('--fps', type=str, help='Adjust sensibility for flow', default='12')
+    parser.add_argument('--fps', type=str, help='Adjust sensibility for flow', default='121010')
     args = parser.parse_args()
     
     CANVAS_WIDTH = int(args.width)
